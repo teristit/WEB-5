@@ -32,13 +32,19 @@ def game_view(request, level_id=1):
     if request.user.is_authenticated:
         player, created = Player.objects.get_or_create(user=request.user)
     
+    # ИСПРАВЛЕНИЕ: Сериализуем level_map в JSON
+    level_map = level.get_level_map()
+    level_map_json = json.dumps(level_map, ensure_ascii=False)
+    
     context = {
         'level': level,
         'player': player,
-        'level_map': level.get_level_map(),
+        'level_map_json': level_map_json,  # ← JSON-строка вместо объекта
     }
     return render(request, 'game/game.html', context)
 
+
+# ... остальные функции без изменений ...
 
 @csrf_exempt
 @require_http_methods(["POST"])
