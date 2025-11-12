@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 import json
+from pprint import pprint
 
 from .models import GameLevel, Player, GameSession, Achievement, PlayerAchievement
 
@@ -26,7 +27,7 @@ def index(request):
 def game_view(request, level_id=1):
     """Страница игры"""
     level = get_object_or_404(GameLevel, id=level_id)
-    
+    pprint(f"Loading level {level_id}: {level.level_data}")  # Для отладкиs
     # Получаем или создаем профиль игрока
     player = None
     if request.user.is_authenticated:
@@ -34,6 +35,7 @@ def game_view(request, level_id=1):
     
     # ИСПРАВЛЕНИЕ: Сериализуем level_map в JSON
     level_map = level.get_level_map()
+    pprint(f"Level map for level {level_id}: {level_map}")  # Для отладки
     level_map_json = json.dumps(level_map, ensure_ascii=False)
     
     context = {

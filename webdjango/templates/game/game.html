@@ -161,13 +161,20 @@
     </div>
 
     <script>
-    // Игровые переменные
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     
-    // ИСПРАВЛЕНИЕ: Безопасная загрузка level_map
     const levelMap = JSON.parse('{{ level_map_json|escapejs }}');
-    
+    const ANIMATION_STATES = {
+        IDLE_RIGHT: 'idle_right',
+        IDLE_LEFT: 'idle_left',
+        WALK_RIGHT: 'walk_right',
+        WALK_LEFT: 'walk_left',
+        JUMP_RIGHT: 'jump_right',
+        JUMP_LEFT: 'jump_left',
+        FALL_RIGHT: 'fall_right',
+        FALL_LEFT: 'fall_left'
+    };
     let gameState = {
         running: false,
         paused: false,
@@ -182,7 +189,11 @@
             velocityX: 0,
             velocityY: 0,
             onGround: false,
-            facing: 'right'
+            facing: 'right',
+            animationState: ANIMATION_STATES.IDLE_RIGHT,
+            animationFrame: 0,
+            animationTimer: 0,
+            animationSpeed: 0.15
         },
         enemies: [],
         platforms: [],
@@ -196,7 +207,141 @@
     const JUMP_FORCE = -15;
     const MOVE_SPEED = 5;
     const TILE_SIZE = 50;
+    // Создание спрайтов для анимации (процедурная генерация)
+    function createPlayerSprite(state, frame) {
+        const spriteCanvas = document.createElement('canvas');
+        spriteCanvas.width = 40;
+        spriteCanvas.height = 60;
+        const spriteCtx = spriteCanvas.getContext('2d');
+        
+        const isLeft = state.includes('left');
+        const isWalking = state.includes('walk');
+        const isJumping = state.includes('jump');
+        const isFalling = state.includes('fall');
+        
+        // Цвет игрока
+        spriteCtx.fillStyle = '#4169E1'; // Royal Blue
+        
+        // Основное тело
+        if (isJumping) {
+            // Поза прыжка - тело вытянуто
+            spriteCtx.fillRect(10, 5, 20, 35);
+            // Голова
+            spriteCtx.fillStyle = '#FFD700';
+            spriteCtx.fillRect(12, 0, 16, 10);
+            // Руки вверх
+            spriteCtx.fillStyle = '#4169E1';
+            if (isLeft) {
+                spriteCtx.fillRect(5, 15, 5, 15);
+                spriteCtx.fillRect(30, 15, 5, 15);
+            } else {
+                spriteCtx.fillRect(5, 15, 5, 15);
+                spriteCtx.fillRect(30, 15, 5, 15);
+            }
+            // Ноги согнуты
+            spriteCtx.fillRect(12, 40, 6, 15);
+            spriteCtx.fillRect(22, 40, 6, 15);
+        } else if (isFalling) {
+            // Поза падения - руки в стороны
+            spriteCtx.fillRect(10, 10, 20, 30);
+            // Голова
+            spriteCtx.fillStyle = '#FFD700';
+            spriteCtx.fillRect(12, 5, 16, 10);
+            // Руки в стороны
+            spriteCtx.fillStyle = '#4169E1';
+            spriteCtx.fillRect(0, 15, 10, 5);
+            spriteCtx.fillRect(30, 15, 10, 5);
+            // Ноги
+            spriteCtx.fillRect(12, 40, 6, 20);
+            spriteCtx.fillRect(22, 40, 6, 20);
+        } else if (isWalking) {
+            // Анимация ходьбы
+            const offset = Math.sin(frame * 3) * 3;
+            
+            // Тело
+            spriteCtx.fillRect(10, 10, 20, 30);
+            // Голова
+            spriteCtx.fillStyle = '#FFD700';
+            spriteCtx.fillRect(12, 5, 16, 10);
+            // Руки (движение)
+            spriteCtx.fillStyle = '#4169E1';
+            if (isLeft) {
+                spriteCtx.fillRect(5, 15 + offset, 5, 15);
+                spriteCtx.fillRect(30, 15 - offset, 5, 15);
+            } else {
+                spriteCtx.fillRect(5, 15 - offset, 5, 15);
+                spriteCtx.fillRect(30, 15 + offset, 5, 15);
+            }
+            // Ноги (движение)
+            spriteCtx.fillRect(12, 40, 6, 15 + offset);
+            spriteCtx.fillRect(22, 40, 6, 15 - offset);
+        } else {
+            // Idle поза
+            spriteCtx.fillRect(10, 10, 20, 30);
+            // Голова
+            spriteCtx.fillStyle = '#FFD700';
+            spriteCtx.fillRect(12, 5, 16, 10);
+            // Руки по бокам
+            spriteCtx.fillStyle = '#4169E1';
+            spriteCtx.fillRect(5, 15, 5, 20);
+            spriteCtx.fillRect(30, 15, 5, 20);
+            // Ноги
+            spriteCtx.fillRect(12, 40, 6, 20);
+            spriteCtx.fillRect(22, 40, 6, 20);
+        }
+        
+        // Добавляем направление взгляда
+        spriteCtx.fillStyle = '#000';
+        if (isLeft) {
+            spriteCtx.fillRect(14, 7, 3, 3); // Левый глаз
+        } else {
+            spriteCtx.fillRect(23, 7, 3, 3); // Правый глаз
+        }
+        
+        return spriteCanvas;
+    }
     
+    // Обновление анимации игрока
+    function updatePlayerAnimation() {
+        const player = gameState.player;
+        
+        // Определение состояния анимации
+        let newState = player.animationState;
+        
+        if (!player.onGround) {
+            // В воздухе
+            if (player.velocityY < 0) {
+                // Прыжок
+                newState = player.facing === 'right' ? ANIMATION_STATES.JUMP_RIGHT : ANIMATION_STATES.JUMP_LEFT;
+            } else {
+                // Падение
+                newState = player.facing === 'right' ? ANIMATION_STATES.FALL_RIGHT : ANIMATION_STATES.FALL_LEFT;
+            }
+        } else if (Math.abs(player.velocityX) > 0.5) {
+            // Движение
+            newState = player.facing === 'right' ? ANIMATION_STATES.WALK_RIGHT : ANIMATION_STATES.WALK_LEFT;
+        } else {
+            // Idle
+            newState = player.facing === 'right' ? ANIMATION_STATES.IDLE_RIGHT : ANIMATION_STATES.IDLE_LEFT;
+        }
+        
+        // Сброс анимации при смене состояния
+        if (newState !== player.animationState) {
+            player.animationState = newState;
+            player.animationFrame = 0;
+            player.animationTimer = 0;
+        }
+        
+        // Обновление кадра анимации
+        player.animationTimer += player.animationSpeed;
+        if (player.animationTimer >= 1) {
+            player.animationTimer = 0;
+            player.animationFrame += 1;
+            if (player.animationFrame >= 8) {
+                player.animationFrame = 0;
+            }
+        }
+    }
     // Загружаем уровень
     function loadLevel() {
         const levelMap = gameState.levelMap;
@@ -282,7 +427,7 @@
         // Обновление позиции игрока
         gameState.player.x += gameState.player.velocityX;
         gameState.player.y += gameState.player.velocityY;
-        
+        updatePlayerAnimation();
         // Проверка коллизий с платформами
         checkPlatformCollisions();
         
@@ -390,13 +535,26 @@
             ctx.fillStyle = '#8B4513';
             for (let platform of gameState.platforms) {
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                // Добавляем текстуру
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
             }
             
             // Рисуем предметы для сбора
-            ctx.fillStyle = '#FFD700';
             for (let item of gameState.collectibles) {
                 if (!item.collected) {
-                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                    // Анимированная монета
+                    const time = Date.now() * 0.005;
+                    const scale = 1 + Math.sin(time) * 0.1;
+                    const size = item.width * scale;
+                    const offset = (item.width - size) / 2;
+                    
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(item.x + offset, item.y + offset, size, size);
+                    ctx.strokeStyle = '#FFA500';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(item.x + offset, item.y + offset, size, size);
                 }
             }
             
@@ -404,11 +562,24 @@
             ctx.fillStyle = '#FF4500';
             for (let enemy of gameState.enemies) {
                 ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                // Глаза
+                ctx.fillStyle = '#000';
+                ctx.fillRect(enemy.x + 10, enemy.y + 10, 8, 8);
+                ctx.fillRect(enemy.x + 32, enemy.y + 10, 8, 8);
             }
             
-            // Рисуем игрока
-            ctx.fillStyle = gameState.player.facing === 'right' ? '#0000FF' : '#0000AA';
-            ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height);
+            // Рисуем анимированного игрока
+            const playerSprite = createPlayerSprite(
+                gameState.player.animationState,
+                gameState.player.animationFrame
+            );
+            ctx.drawImage(
+                playerSprite,
+                gameState.player.x,
+                gameState.player.y,
+                gameState.player.width,
+                gameState.player.height
+            );
         }
         
         // Игровой цикл
@@ -467,6 +638,8 @@
             gameState.player.y = 300;
             gameState.player.velocityX = 0;
             gameState.player.velocityY = 0;
+            gameState.player.animationState = ANIMATION_STATES.IDLE_RIGHT;
+            gameState.player.animationFrame = 0;
             loadLevel();
         }
         
