@@ -17,4 +17,8 @@ urlpatterns = [
     path('api/login/', views.login_user, name='api_login'),
     path('api/register/', views.register_user, name='api_register'),
     path('api/logout/', views.logout_user, name='api_logout'),
+        
+    # API для спрайтов
+    path('api/sprites/', views.get_sprites, name='get_sprites'),
+    path('api/sprite-mapping/', views.get_sprite_mapping, name='get_sprite_mapping'),
 ]
