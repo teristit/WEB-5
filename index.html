@@ -352,7 +352,7 @@
             <h2 id="gameOverTitle">Игра окончена!</h2>
             <p class="score-display" id="finalScore">Ваш счёт: 0</p>
             <p id="gameOverMessage"></p>
-            <button class="btn" onclick="restartGame()"Новая игра</button>
+            <button class="btn" onclick="restartGame()">Новая игра</button>
         </div>
     </div>
 
@@ -481,7 +481,7 @@
             });
 
             gameState.player.x = 50;
-            gameState.player.y = 350;
+            gameState.player.y = 450 - gameState.player.height;
             gameState.player.velocityX = 0;
             gameState.player.velocityY = 0;
             gameState.player.onGround = false;
